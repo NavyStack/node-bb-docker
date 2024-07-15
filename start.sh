@@ -19,18 +19,16 @@ set_defaults() {
   export APP_DIR="/usr/src/app/"
   export HOME="$HOME_DIR"
   export LOG_DIR="$APP_DIR/logs"
-  export CONFIG_DIR="${CONFIG_DIR:-/opt/config}"
 }
 
 # Check and set UID and GID if provided
 if [ "$(id -u)" = '0' ]; then
-  # Handle UID and GID if provided
-  if [ -z "$UID" ] || [ -z "$GID" ]; then
-      printf "Using Default UID:GID (1001:1001)\n"
+  if [ -n "$UID" ] && [ -n "$GID" ]; then
+    echo "Using provided UID = $UID / GID = $GID"
+    usermod -u "$UID" nodebb
+    groupmod -g "$GID" nodebb
   else
-      echo "Using provided UID = $UID / GID = $GID"
-      usermod -u "$UID" nodebb
-      groupmod -g "$GID" nodebb
+    echo "Using Default UID:GID (1001:1001)"
   fi
 
   echo "Starting with UID/GID: $(id -u "nodebb")/$(getent group "nodebb" | cut -d ":" -f 3)"
@@ -39,23 +37,12 @@ if [ "$(id -u)" = '0' ]; then
   chown -R "$UID:$GID" "$HOME_DIR" "$APP_DIR" "$CONFIG_DIR"
 fi
 
-# Function to check if a directory exists and is writable
 check_directory() {
   local dir="$1"
-  if [ ! -d "$dir" ]; then
-    echo "Error: Directory $dir does not exist. Creating..."
-    mkdir -p "$dir" || {
-      echo "Error: Failed to create directory $dir"
-      exit 1
-    }
-  fi
-  if [ ! -w "$dir" ]; then
-    echo "Error: No write permission for directory $dir"
-    exit 1
-  fi
+  [ -d "$dir" ] || { echo "Directory $dir does not exist. Creating..."; mkdir -p "$dir"; }
+  [ -w "$dir" ] || { echo "No write permission for directory $dir"; exit 1; }
 }
 
-# Function to copy or link package.json and lock files based on package manager
 copy_or_link_files() {
   local src_dir="$1"
   local dest_dir="$2"
@@ -66,99 +53,47 @@ copy_or_link_files() {
     yarn) lock_file="yarn.lock" ;;
     npm) lock_file="package-lock.json" ;;
     pnpm) lock_file="pnpm-lock.yaml" ;;
-    *)
-      echo "Unknown package manager: $package_manager"
-      exit 1
-      ;;
+    *) echo "Unknown package manager: $package_manager"; exit 1 ;;
   esac
 
-  # Check if source and destination files are the same
-  if [ "$(realpath "$src_dir/package.json")" != "$(realpath "$dest_dir/package.json")" ]; then
-    cp "$src_dir/package.json" "$dest_dir/package.json"
-  fi
+  [ "$(realpath "$src_dir/package.json")" != "$(realpath "$dest_dir/package.json")" ] && cp "$src_dir/package.json" "$dest_dir/package.json"
+  [ "$(realpath "$src_dir/$lock_file")" != "$(realpath "$dest_dir/$lock_file")" ] && cp "$src_dir/$lock_file" "$dest_dir/$lock_file"
 
-  if [ "$(realpath "$src_dir/$lock_file")" != "$(realpath "$dest_dir/$lock_file")" ]; then
-    cp "$src_dir/$lock_file" "$dest_dir/$lock_file"
-  fi
-
-  # Remove unnecessary lock files in src_dir
   rm -f "$src_dir/"{yarn.lock,package-lock.json,pnpm-lock.yaml}
-
-  # Symbolically link the copied files in src_dir to dest_dir
   ln -fs "$dest_dir/package.json" "$src_dir/package.json"
   ln -fs "$dest_dir/$lock_file" "$src_dir/$lock_file"
 }
 
-# Function to install dependencies using pnpm
 install_dependencies() {
   case "$PACKAGE_MANAGER" in
-    yarn) yarn install || {
-      echo "Failed to install dependencies with yarn"
-      exit 1
-    } ;;
-    npm) npm install || {
-      echo "Failed to install dependencies with npm"
-      exit 1
-    } ;;
-    pnpm) pnpm install || {
-      echo "Failed to install dependencies with pnpm"
-      exit 1
-    } ;;
-    *)
-      echo "Unknown package manager: $PACKAGE_MANAGER"
-      exit 1
-      ;;
-  esac
+    yarn) yarn install ;;
+    npm) npm install ;;
+    pnpm) pnpm install ;;
+    *) echo "Unknown package manager: $PACKAGE_MANAGER"; exit 1 ;;
+  esac || { echo "Failed to install dependencies with $PACKAGE_MANAGER"; exit 1; }
 }
 
-# Function to start setup session
 start_setup_session() {
   local config="$1"
   echo "Starting setup session"
   exec /usr/src/app/nodebb setup --config="$config"
 }
 
-# Function to start forum
 start_forum() {
   local config="$1"
   local start_build="$2"
 
   echo "Starting forum"
-  if [ "$start_build" = true ]; then
-    echo "Build before start is enabled. Building..."
-    /usr/src/app/nodebb build --config="$config" || {
-      echo "Failed to build NodeBB. Exiting..."
-      exit 1
-    }
-  fi
+  [ "$start_build" = true ] && { echo "Building..."; /usr/src/app/nodebb build --config="$config" || { echo "Failed to build NodeBB. Exiting..."; exit 1; }; }
 
   case "$PACKAGE_MANAGER" in
-    yarn)
-      yarn start --config="$config" --no-silent --no-daemon || {
-        echo "Failed to start forum with yarn"
-        exit 1
-      }
-      ;;
-    npm)
-      npm start -- --config="$config" --no-silent --no-daemon || {
-        echo "Failed to start forum with npm"
-        exit 1
-      }
-      ;;
-    pnpm)
-      pnpm start -- --config="$config" --no-silent --no-daemon || {
-        echo "Failed to start forum with pnpm"
-        exit 1
-      }
-      ;;
-    *)
-      echo "Unknown package manager: $PACKAGE_MANAGER"
-      exit 1
-      ;;
-  esac
+    yarn) yarn start --config="$config" --no-silent --no-daemon ;;
+    npm) npm start -- --config="$config" --no-silent --no-daemon ;;
+    pnpm) pnpm start -- --config="$config" --no-silent --no-daemon ;;
+    *) echo "Unknown package manager: $PACKAGE_MANAGER"; exit 1 ;;
+  esac || { echo "Failed to start forum with $PACKAGE_MANAGER"; exit 1; }
 }
 
-# Function to start installation session
 start_installation_session() {
   local nodebb_init_verb="$1"
   local config="$2"
@@ -168,33 +103,18 @@ start_installation_session() {
   exec /usr/src/app/nodebb "$nodebb_init_verb" --config="$config"
 }
 
-# Function for debugging and logging
-debug_log() {
-  local message="$1"
-  echo "DEBUG: $message"
-}
-
-# Main function
 main() {
-  
   check_directory "$CONFIG_DIR"
   copy_or_link_files /usr/src/app "$CONFIG_DIR" "$PACKAGE_MANAGER"
   install_dependencies
 
-  debug_log "PACKAGE_MANAGER: $PACKAGE_MANAGER"
-  debug_log "CONFIG location: $CONFIG"
-  debug_log "START_BUILD: $START_BUILD"
-
   if [ -n "$SETUP" ]; then
     start_setup_session "$CONFIG"
-  fi
-
-  if [ -f "$CONFIG" ]; then
+  elif [ -f "$CONFIG" ]; then
     start_forum "$CONFIG" "$START_BUILD"
   else
     start_installation_session "$NODEBB_INIT_VERB" "$CONFIG"
   fi
 }
 
-# Execute main function
-gosu nodebb bash -c "$(declare -f set_defaults check_directory copy_or_link_files install_dependencies start_setup_session start_forum start_installation_session debug_log main); main" "$@"
+gosu nodebb bash -c "$(declare -f set_defaults check_directory copy_or_link_files install_dependencies start_setup_session start_forum start_installation_session main); set_defaults; main" "$@"
