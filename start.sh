@@ -60,9 +60,9 @@ copy_or_link_files() {
 
 install_dependencies() {
   case "$PACKAGE_MANAGER" in
-    yarn) yarn install ;;
-    npm) npm install ;;
-    pnpm) pnpm install ;;
+    yarn) gosu nodebb yarn install ;;
+    npm) gosu nodebb npm install ;;
+    pnpm) gosu nodebb pnpm install ;;
     *)
       echo "Unknown package manager: $PACKAGE_MANAGER"
       exit 1
