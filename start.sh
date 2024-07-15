@@ -11,7 +11,7 @@ set_defaults() {
   export PACKAGE_MANAGER="${PACKAGE_MANAGER:-npm}"
   export OVERRIDE_UPDATE_LOCK="${OVERRIDE_UPDATE_LOCK:-false}"
 
-  export DEFAULT_USER="${CONTAINER_USER:-nodebb}" 
+  export DEFAULT_USER="${CONTAINER_USER:-nodebb}"
   export DEFAULT_USER_ID="${CONTAINER_USER_ID:-1001}"
   export DEFAULT_GROUP_ID="${CONTAINER_GRP_ID:-1001}"
 
@@ -20,22 +20,6 @@ set_defaults() {
   export HOME="$HOME_DIR"
   export LOG_DIR="$APP_DIR/logs"
 }
-
-# Check and set UID and GID if provided
-if [ "$(id -u)" = '0' ]; then
-  if [ -n "$UID" ] && [ -n "$GID" ]; then
-    echo "Using provided UID = $UID / GID = $GID"
-    usermod -u "$UID" nodebb
-    groupmod -g "$GID" nodebb
-  else
-    echo "Using Default UID:GID (1001:1001)"
-  fi
-
-  echo "Starting with UID/GID: $(id -u "nodebb")/$(getent group "nodebb" | cut -d ":" -f 3)"
-  set_defaults
-  install -d -o nodebb -g nodebb -m 700 "$HOME_DIR" "$APP_DIR" "$CONFIG_DIR"
-  chown -R "$UID:$GID" "$HOME_DIR" "$APP_DIR" "$CONFIG_DIR"
-fi
 
 check_directory() {
   local dir="$1"
@@ -87,9 +71,9 @@ start_forum() {
   [ "$start_build" = true ] && { echo "Building..."; /usr/src/app/nodebb build --config="$config" || { echo "Failed to build NodeBB. Exiting..."; exit 1; }; }
 
   case "$PACKAGE_MANAGER" in
-    yarn) yarn start --config="$config" --no-silent --no-daemon ;;
-    npm) npm start -- --config="$config" --no-silent --no-daemon ;;
-    pnpm) pnpm start -- --config="$config" --no-silent --no-daemon ;;
+    yarn) gosu nodebb yarn start --config="$config" --no-silent --no-daemon ;;
+    npm) gosu nodebb npm start -- --config="$config" --no-silent --no-daemon ;;
+    pnpm) gosu nodebb pnpm start -- --config="$config" --no-silent --no-daemon ;;
     *) echo "Unknown package manager: $PACKAGE_MANAGER"; exit 1 ;;
   esac || { echo "Failed to start forum with $PACKAGE_MANAGER"; exit 1; }
 }
@@ -104,6 +88,22 @@ start_installation_session() {
 }
 
 main() {
+  set_defaults
+
+  if [ "$(id -u)" = '0' ]; then
+    if [ -n "$UID" ] && [ -n "$GID" ]; then
+      echo "Using provided UID = $UID / GID = $GID"
+      usermod -u "$UID" nodebb
+      groupmod -g "$GID" nodebb
+    else
+      echo "Using Default UID:GID (1001:1001)"
+    fi
+
+    echo "Starting with UID/GID: $(id -u "nodebb")/$(getent group "nodebb" | cut -d ":" -f 3)"
+    install -d -o nodebb -g nodebb -m 700 "$HOME_DIR" "$APP_DIR" "$CONFIG_DIR"
+    chown -R "$UID:$GID" "$HOME_DIR" "$APP_DIR" "$CONFIG_DIR"
+  fi
+
   check_directory "$CONFIG_DIR"
   copy_or_link_files /usr/src/app "$CONFIG_DIR" "$PACKAGE_MANAGER"
   install_dependencies
@@ -117,4 +117,4 @@ main() {
   fi
 }
 
-gosu nodebb bash -c "$(declare -f set_defaults check_directory copy_or_link_files install_dependencies start_setup_session start_forum start_installation_session main); set_defaults; main" "$@"
+main "$@"
