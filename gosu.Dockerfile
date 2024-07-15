@@ -54,8 +54,8 @@ RUN groupadd --gid ${GID} ${USER} \
   && useradd --uid ${UID} --gid ${GID} --home-dir /usr/src/app/ --shell /bin/bash ${USER} \
   && mkdir -p /usr/src/app/logs/ /opt/config/ \
   && chown -R ${USER}:${USER} /usr/src/app/ /opt/config/
-  
-ENV GOSU_VERSION 1.17
+
+ENV GOSU_VERSION=1.17
 RUN set -eux; \
 # save list of currently installed packages for later so we can clean up
 	savedAptMark="$(apt-mark showmanual)"; \

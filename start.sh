@@ -46,6 +46,9 @@ copy_or_link_files() {
   rm -f "$src_dir/"{yarn.lock,package-lock.json,pnpm-lock.yaml}
   ln -fs "$dest_dir/package.json" "$src_dir/package.json"
   ln -fs "$dest_dir/$lock_file" "$src_dir/$lock_file"
+
+  chown -h "$DEFAULT_USER:$DEFAULT_USER" "$src_dir/package.json" "$src_dir/$lock_file"
+  chown "$DEFAULT_USER:$DEFAULT_USER" "$dest_dir/package.json" "$dest_dir/$lock_file"
 }
 
 install_dependencies() {
