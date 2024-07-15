@@ -1,0 +1,16 @@
+{
+  "name": "nodebb-docker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "t1": "prettier -w ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "prettier": "^3.3.3",
+    "prettier-plugin-sh": "^0.14.0"
+  }
+}

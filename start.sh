@@ -12,19 +12,23 @@ set_defaults() {
   export OVERRIDE_UPDATE_LOCK="${OVERRIDE_UPDATE_LOCK:-false}"
 
   export DEFAULT_USER="${CONTAINER_USER:-nodebb}"
-  export DEFAULT_USER_ID="${CONTAINER_USER_ID:-1001}"
-  export DEFAULT_GROUP_ID="${CONTAINER_GRP_ID:-1001}"
-
   export HOME_DIR="/home/$DEFAULT_USER"
   export APP_DIR="/usr/src/app/"
   export HOME="$HOME_DIR"
   export LOG_DIR="$APP_DIR/logs"
+  export BUILD_DIR="$APP_DIR/build"
 }
 
 check_directory() {
   local dir="$1"
-  [ -d "$dir" ] || { echo "Directory $dir does not exist. Creating..."; mkdir -p "$dir"; }
-  [ -w "$dir" ] || { echo "No write permission for directory $dir"; exit 1; }
+  [ -d "$dir" ] || {
+    echo "Directory $dir does not exist. Creating..."
+    mkdir -p "$dir"
+  }
+  [ -w "$dir" ] || {
+    echo "No write permission for directory $dir"
+    exit 1
+  }
 }
 
 copy_or_link_files() {
@@ -37,7 +41,10 @@ copy_or_link_files() {
     yarn) lock_file="yarn.lock" ;;
     npm) lock_file="package-lock.json" ;;
     pnpm) lock_file="pnpm-lock.yaml" ;;
-    *) echo "Unknown package manager: $package_manager"; exit 1 ;;
+    *)
+      echo "Unknown package manager: $package_manager"
+      exit 1
+      ;;
   esac
 
   [ "$(realpath "$src_dir/package.json")" != "$(realpath "$dest_dir/package.json")" ] && cp "$src_dir/package.json" "$dest_dir/package.json"
@@ -56,14 +63,20 @@ install_dependencies() {
     yarn) yarn install ;;
     npm) npm install ;;
     pnpm) pnpm install ;;
-    *) echo "Unknown package manager: $PACKAGE_MANAGER"; exit 1 ;;
-  esac || { echo "Failed to install dependencies with $PACKAGE_MANAGER"; exit 1; }
+    *)
+      echo "Unknown package manager: $PACKAGE_MANAGER"
+      exit 1
+      ;;
+  esac || {
+    echo "Failed to install dependencies with $PACKAGE_MANAGER"
+    exit 1
+  }
 }
 
 start_setup_session() {
   local config="$1"
   echo "Starting setup session"
-  exec /usr/src/app/nodebb setup --config="$config"
+  gosu nodebb /usr/src/app/nodebb setup --config="$config"
 }
 
 start_forum() {
@@ -71,14 +84,26 @@ start_forum() {
   local start_build="$2"
 
   echo "Starting forum"
-  [ "$start_build" = true ] && { echo "Building..."; /usr/src/app/nodebb build --config="$config" || { echo "Failed to build NodeBB. Exiting..."; exit 1; }; }
+  [ "$start_build" = true ] && {
+    echo "Building..."
+    gosu nodebb /usr/src/app/nodebb build --config="$config" || {
+      echo "Failed to build NodeBB. Exiting..."
+      exit 1
+    }
+  }
 
   case "$PACKAGE_MANAGER" in
     yarn) gosu nodebb yarn start --config="$config" --no-silent --no-daemon ;;
     npm) gosu nodebb npm start -- --config="$config" --no-silent --no-daemon ;;
     pnpm) gosu nodebb pnpm start -- --config="$config" --no-silent --no-daemon ;;
-    *) echo "Unknown package manager: $PACKAGE_MANAGER"; exit 1 ;;
-  esac || { echo "Failed to start forum with $PACKAGE_MANAGER"; exit 1; }
+    *)
+      echo "Unknown package manager: $PACKAGE_MANAGER"
+      exit 1
+      ;;
+  esac || {
+    echo "Failed to start forum with $PACKAGE_MANAGER"
+    exit 1
+  }
 }
 
 start_installation_session() {
@@ -87,7 +112,7 @@ start_installation_session() {
 
   echo "Config file not found at $config"
   echo "Starting installation session"
-  exec /usr/src/app/nodebb "$nodebb_init_verb" --config="$config"
+  gosu nodebb /usr/src/app/nodebb "$nodebb_init_verb" --config="$config"
 }
 
 main() {
@@ -104,7 +129,7 @@ main() {
 
     echo "Starting with UID/GID: $(id -u "nodebb")/$(getent group "nodebb" | cut -d ":" -f 3)"
     install -d -o nodebb -g nodebb -m 700 "$HOME_DIR" "$APP_DIR" "$CONFIG_DIR"
-    chown -R "$UID:$GID" "$HOME_DIR" "$APP_DIR" "$CONFIG_DIR"
+    chown -R "nodebb:nodebb" "$HOME_DIR" "$APP_DIR" "$CONFIG_DIR" "$BUILD_DIR"
   fi
 
   check_directory "$CONFIG_DIR"
