@@ -82,7 +82,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push ( NodeBB Gosu )
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           file: gosu.Dockerfile
           tags: ${{ steps.meta2.outputs.tags }}
@@ -91,7 +91,7 @@ jobs:
           outputs: type=image,push=true
 
       - name: Build and push ( NodeBB )
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           file: Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
